@@ -1,10 +1,48 @@
 <html>
 	<body>
-		<div id="next"></div>
-		<div id="content"></div>
-		<div id="stat"></div>
+		<div class="all">
+			<div class="main-col">
+				<div id="field"></div>
+				<div id="stat"></div>
+			</div>
+			<div class="side-col">
+				<div class="next-figure">
+					Next figure will be:
+					<div id="next"></div>
+				</div>
+				<div class="description">
+					No bullshit shiny sparkles, just tetris!
+					<ul>
+						<li>Space - start game (or pause if you're pussy)</li>
+						<li>Arrow buttons - move, rotate, or speed up falling for figure</li>
+						<li>WASD - same as above if you're a gamer</li>
+					</ul>
+				</div>
+			</div>
+		</div>
+		
 		<style>
-		#content, #next {
+		.all {
+			display: flex;
+			flex-direction: row;
+		}
+		
+		.main-col {
+			display: flex;
+			flex-direction: column;
+		}
+		
+		.side-col {
+			display: flex;
+			flex-direction: column;
+		}
+		
+		.description {
+			border: 1px dotted black;
+			padding: 1em;
+		}
+		
+		#field, #next {
 			display: flex;
 			flex-direction: column;
 		}
@@ -41,12 +79,12 @@
 				{basis: 3, name: 'T', pixels: [[0, 0], [1, 0], [2, 0], [1, 1]]},
 			]
 			const START_INTERVAL = 500;
-			const newIntervalsPlay = [[10, 400], [20, 350], [30, 300], [50, 250], [100, 200], [200, 150], [300, 100]];
-			const newIntervalsTest = [[2, 300], [4, 200], [6, 100]];
 			const maxBasis = Math.max(...figureMaps.map(x => x.basis))
 			
 			function getSpeedStack() {
-				return [...newIntervalsTest]
+				const speedStackRealGame = [[5, 400], [10, 350], [20, 300], [30, 250], [40, 200], [50, 150], [60, 100]];
+				const speedStackTest = [[2, 300], [4, 200], [6, 100]];
+				return [...speedStackRealGame]
 			}
 			
 			function initField() {
@@ -159,7 +197,7 @@
 			}
 			
 			function generateFieldElements() {
-				const content = document.getElementById("content");
+				const fieldEl = document.getElementById("field");
 				for (let r = 0; r < H; ++r) {
 					const rowDiv = document.createElement("div")
 					rowDiv.className = "tetris-row";
@@ -169,12 +207,12 @@
 						colDiv.id = "tetris-" + (H-r-1) + "-" + c
 						rowDiv.appendChild(colDiv)
 					}
-					content.appendChild(rowDiv)
+					fieldEl.appendChild(rowDiv)
 				}
 			}
 			
 			function generateNextFigureElements() {
-				const content = document.getElementById("next");
+				const nextEl = document.getElementById("next");
 				
 				for (let r = 0; r < maxBasis; ++r) {
 					const rowDiv = document.createElement("div")
@@ -185,7 +223,7 @@
 						colDiv.id = "next-" + (maxBasis-r-1) + "-" + c
 						rowDiv.appendChild(colDiv)
 					}
-					content.appendChild(rowDiv)
+					nextEl.appendChild(rowDiv)
 				}
 			}
 			
@@ -370,16 +408,16 @@
 			
 			
 			window.addEventListener('keydown', e => {
-				switch (e.key) {
+				switch (e.code) {
 					case 'ArrowLeft': onLeft(); break;
 					case 'ArrowRight': onRight(); break;
 					case 'ArrowDown': step("down clicked"); break;
 					case 'ArrowUp': onClockwise(); break;
-					case 'a': onLeft(); break;
-					case 'd': onRight(); break;
-					case 's': step("s clicked"); break;
-					case 'w': onClockwise(); break;
-					case ' ': toggleStart(); break;
+					case 'KeyA': onLeft(); break;
+					case 'KeyD': onRight(); break;
+					case 'KeyS': step("s clicked"); break;
+					case 'KeyW': onClockwise(); break;
+					case 'Space': toggleStart(); break;
 				}
 			})
 		</script>
