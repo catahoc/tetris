@@ -1,0 +1,387 @@
+<html>
+	<body>
+		<div id="next"></div>
+		<div id="content"></div>
+		<div id="stat"></div>
+		<style>
+		#content, #next {
+			display: flex;
+			flex-direction: column;
+		}
+		
+		.tetris-row {
+			flex-basis: 20px;
+			display: flex;
+			flex-direction: row;
+		}
+		
+		.tetris-col {
+			flex-basis: 20px;
+			border: 1px solid black;
+		}
+		
+		.tetris-col.filled {
+			background: gray;
+		}
+		
+		.tetris-col.figure {
+			background: green;
+		}
+		</style>
+		<script type="text/javascript">
+			const H = 20;
+			const W = 10;
+			const figureMaps = [
+				{basis: 3, name: 'L1', pixels: [[0, 0], [1, 0], [2, 0], [0, 1]]},
+				{basis: 3, name: 'L2', pixels: [[0, 0], [1, 0], [2, 0], [2, 1]]},
+				{basis: 4, name: 'I', pixels: [[0, 2], [1, 2], [2, 2], [3, 2]]},
+				{basis: 3, name: 'S1', pixels: [[1, 0], [2, 0], [0, 1], [1, 1]]},
+				{basis: 3, name: 'S2', pixels: [[0, 0], [1, 0], [1, 1], [2, 1]]},
+				{basis: 2, name: 'H', pixels: [[0, 0], [1, 0], [1, 1], [0, 1]]},
+				{basis: 3, name: 'T', pixels: [[0, 0], [1, 0], [2, 0], [1, 1]]},
+			]
+			const START_INTERVAL = 500;
+			const newIntervalsPlay = [[10, 400], [20, 350], [30, 300], [50, 250], [100, 200], [200, 150], [300, 100]];
+			const newIntervalsTest = [[2, 300], [4, 200], [6, 100]];
+			const maxBasis = Math.max(...figureMaps.map(x => x.basis))
+			
+			function getSpeedStack() {
+				return [...newIntervalsTest]
+			}
+			
+			function initField() {
+				return []
+			}
+		
+			function getPixel(field, r, c) {
+				if (r < 0 || c < 0) {
+					return false;
+				}
+				if (field.length <= r) {
+					return false
+				}
+				if (field[r].length <= c) {
+					return false;
+				}
+				return field[r][c];
+			}
+			
+			function getRandomFigure() {
+				const map = figureMaps[Math.floor(Math.random() * figureMaps.length)];
+				return {r: H, c: Math.floor((W-map.basis) / 2), map, rotation: 0}
+			}
+			
+			// not used. if rotation/move bumps it is just not done
+			function normFigureCol(figure) {
+				const tooLeftPixel = getFigurePixels(figure).find(([r, c]) => c < 0)
+				if (tooLeftPixel != null) {
+					figure.c = figure.c + (-tooLeftPixel.c);
+				}
+				const tooRightPixel = getFigurePixels(figure).find(([r, c]) => c >= W)
+				if (tooRightPixel != null) {
+					figure.c = figure.c - (tooRightPixel.c-W+1);
+				}
+			}
+			
+			function trySetNewFigureRotationAndC(field, figure, newRotation, newC) {
+				const isPossible = getFigurePixels(figure, newRotation, newC).every(([r, c]) => {
+					return c >= 0 && c < W
+						&& r >= 0 // but not r<H, because figure can be rotated in outer space
+						&& !getPixel(field, r, c)
+				});
+				if (!isPossible) {
+					return false;
+				}
+				figure.rotation = newRotation;
+				figure.c = newC;
+				return true;
+			}
+			
+			function rotateFigureClw(field, figure) {
+				return trySetNewFigureRotationAndC(field, figure, (figure.rotation + 1) % 4, figure.c)
+			}
+			
+			function rotateFigureCcw(field, figure) {
+				return trySetNewFigureRotationAndC(field, figure, (figure.rotation - 1) % 4, figure.c)
+			}
+			
+			function moveFigureLeft(field, figure) {
+				return trySetNewFigureRotationAndC(field, figure, figure.rotation, figure.c - 1)
+			}
+			
+			function moveFigureRight(field, figure) {
+				return trySetNewFigureRotationAndC(field, figure, figure.rotation, figure.c + 1)
+			}
+			
+			function getFigurePixels(figure, newRotation, newC) {
+				// rotation
+				// 0 - r+c+
+				// 1 - c-r+
+				// 2 - r-c-
+				// 3 - c+r-
+				const rotation = newRotation ?? figure.rotation;
+				const absC = newC ?? figure.c;
+				const reverseRC = rotation == 1 || rotation == 3;
+				const reverseFirst = rotation == 1 || rotation == 2;
+				const reverseSecond = rotation == 2 || rotation == 3;
+				const localPixels = figure.map.pixels.map(([r, c]) => {
+					const [r2, c2] = reverseRC ? [c, r] : [r, c];
+					return [reverseFirst ? (figure.map.basis - r2 - 1) : r2, reverseSecond ? (figure.map.basis - c2 - 1) : c2]
+				});
+				const absolutePixels = localPixels.map(([r, c]) => [r + figure.r, c + absC]);
+				return absolutePixels;
+			}
+			
+			function setPixel(field, r, c, value) {
+				while (field.length <= r) {
+					const newRow = [];
+					for (let c = 0; c < W; ++c) {
+						newRow.push(false);
+					}
+					field.push(newRow)
+				}
+				field[r][c] = value;
+			}
+			
+			function clearFullRows(field) {
+				let fullRowsCount = 0;
+				
+				const len = field.length;
+				for (let ir = 0; ir < len; ++ir) {
+					const r = len - ir - 1;
+					if (field[r].every(x => x)) {
+						field.splice(r, 1)
+						fullRowsCount++;
+					}
+				}
+				
+				return fullRowsCount;
+			}
+			
+			function generateFieldElements() {
+				const content = document.getElementById("content");
+				for (let r = 0; r < H; ++r) {
+					const rowDiv = document.createElement("div")
+					rowDiv.className = "tetris-row";
+					for (let c = 0; c < W; ++c) {
+						const colDiv = document.createElement("div")
+						colDiv.className = "tetris-col"
+						colDiv.id = "tetris-" + (H-r-1) + "-" + c
+						rowDiv.appendChild(colDiv)
+					}
+					content.appendChild(rowDiv)
+				}
+			}
+			
+			function generateNextFigureElements() {
+				const content = document.getElementById("next");
+				
+				for (let r = 0; r < maxBasis; ++r) {
+					const rowDiv = document.createElement("div")
+					rowDiv.className = "tetris-row";
+					for (let c = 0; c < maxBasis; ++c) {
+						const colDiv = document.createElement("div")
+						colDiv.className = "tetris-col"
+						colDiv.id = "next-" + (maxBasis-r-1) + "-" + c
+						rowDiv.appendChild(colDiv)
+					}
+					content.appendChild(rowDiv)
+				}
+			}
+			
+			function renderNextFigure(figure) {
+				for (let r = 0; r < maxBasis; ++r) {
+					for (let c = 0; c < maxBasis; c++) {
+						const el = document.getElementById("next-" + r + "-" + c);
+						el.classList.remove('figure');
+					}
+				}
+				for (let [r, c] of figure.map.pixels) {
+					const el = document.getElementById("next-" + r + "-" + c);
+					el.classList.add('figure');
+				}
+			}
+			
+			function renderState(state, prevRendering) {
+				const {field, figure, score, lastScore, linesBurned, gameover} = state;
+				const statEl = document.getElementById("stat");
+				if (gameover) {
+					statEl.innerText = `GAMEOVER! Your final score is ${score}! Lines burned ${linesBurned}!`;
+				} else {
+					statEl.innerText = `Your score is ${score} (last +${lastScore})! Lines burned ${linesBurned}!`;
+				}
+				
+				if (prevRendering != null) {
+					for (let el of prevRendering.figureEls) {
+						el.classList.remove('figure');
+					}
+				}
+				for (let r = 0; r < H; ++r) {
+					for (let c = 0; c < W; c++) {
+						const el = document.getElementById("tetris-" + r + "-" + c);
+						if (getPixel(field, r, c)) { 
+							el.classList.add('filled');
+						} else { 
+							el.classList.remove('filled');
+						}
+					}
+				}
+				const figureEls = [];
+				if (figure != null) {
+					const pixels = getFigurePixels(figure)
+					for (let [r, c] of pixels) {
+						const el = document.getElementById("tetris-" + r + "-" + c);
+						if (el == null) {
+							continue;
+						}
+						el.classList.add('figure');
+						figureEls.push(el);
+					}
+				}
+				
+				return {figureEls};
+			}
+			
+			function goDown(figure) {
+				figure.r = figure.r - 1;
+			}
+			
+			function logField(field) {
+				console.log('[');
+				for (let r = 0; r < field.length; r++) {
+					console.log(field[r].map(x => x ? 'X' : '_').join(''));
+				}
+				console.log(']');
+			}
+			
+			function isFieldFull(field) {
+				return field.length >= H;
+			}
+			
+			function replaceInterval(newInterval) {
+			}
+			
+			function settle(state, figurePixels, reason) {
+				for (let [r, c] of figurePixels) {
+					setPixel(state.field, r, c, true);
+				}
+				const count = clearFullRows(state.field);
+				state.linesBurned += count;
+				while (state.speedStack.length > 0 && state.speedStack[0][0] <= state.linesBurned) {
+					let [,nextInterval] = state.speedStack.shift();
+					state.interval = nextInterval;
+					replaceInterval()
+				}
+				const scorePlus = count*count*1000;
+				if (scorePlus != 0) {
+					state.score += scorePlus;
+					state.lastScore = scorePlus;
+				}
+				if (isFieldFull(state.field)) {
+					state.gameover = true;
+				}
+				state.figure = state.nextFigure;
+				state.nextFigure = getRandomFigure();
+				renderNextFigure(state.nextFigure);
+			}
+			
+			function tryGoDown(state, reason) {
+				let pixels = getFigurePixels(state.figure);
+				for (let [r, c] of pixels) {
+					if (r == 0 || getPixel(state.field, r-1, c) == true) {
+						settle(state, pixels, reason)
+						return;
+					}
+				}
+				goDown(state.figure);
+			}
+			
+			let _state = {
+				field: initField(),
+				figure: getRandomFigure(),
+				nextFigure: getRandomFigure(),
+				score: 0,
+				linesBurned: 0,
+				lastScore: 0,
+				gameover: false,
+				interval: START_INTERVAL,
+				speedStack: getSpeedStack(),
+			}
+			let _rendering = null;
+			let _intervalToken = null;
+			
+			function rerender() {
+				_rendering = renderState(_state, _rendering)
+			}
+			
+			generateFieldElements();
+			generateNextFigureElements();
+			rerender();
+			renderNextFigure(_state.nextFigure);
+			
+			function onClockwise() {
+				rotateFigureClw(_state.field, _state.figure)
+				rerender()
+			}
+			
+			function onCounterClockwise() {
+				rotateFigureCcw(_state.field, _state.figure);
+				rerender();
+			}
+			
+			function onLeft() {
+				moveFigureLeft(_state.field, _state.figure);
+				rerender();
+			}
+			
+			function onRight() {
+				moveFigureRight(_state.field, _state.figure);
+				rerender();
+			}
+			
+			function step(reason) {
+				if (_state.gameover) {
+					return;
+				}
+				tryGoDown(_state, reason);
+				rerender()
+			}
+			
+			function replaceInterval() {
+				if (_intervalToken != null) {
+					clearInterval(_intervalToken)
+
+				}
+				_intervalToken = setInterval(() => {
+					step("interval passed ");
+				}, _state.interval)
+			}
+			
+			function toggleStart() {
+				if (_intervalToken == null) {
+					_intervalToken = setInterval(() => {
+						step("interval passed ");
+					}, _state.interval)
+				} else {
+					clearInterval(_intervalToken)
+					_intervalToken = null;
+				}
+			}
+			
+			
+			window.addEventListener('keydown', e => {
+				switch (e.key) {
+					case 'ArrowLeft': onLeft(); break;
+					case 'ArrowRight': onRight(); break;
+					case 'ArrowDown': step("down clicked"); break;
+					case 'ArrowUp': onClockwise(); break;
+					case 'a': onLeft(); break;
+					case 'd': onRight(); break;
+					case 's': step("s clicked"); break;
+					case 'w': onClockwise(); break;
+					case ' ': toggleStart(); break;
+				}
+			})
+		</script>
+	</body>
+</html>
