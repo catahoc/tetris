@@ -70,16 +70,16 @@
 			const H = 20;
 			const W = 10;
 			const figureMaps = [
-				{basis: 3, name: 'L1', pixels: [[0, 0], [1, 0], [2, 0], [0, 1]]},
-				{basis: 3, name: 'L2', pixels: [[0, 0], [1, 0], [2, 0], [2, 1]]},
-				{basis: 4, name: 'I', pixels: [[0, 2], [1, 2], [2, 2], [3, 2]]},
-				{basis: 3, name: 'S1', pixels: [[1, 0], [2, 0], [0, 1], [1, 1]]},
-				{basis: 3, name: 'S2', pixels: [[0, 0], [1, 0], [1, 1], [2, 1]]},
-				{basis: 2, name: 'H', pixels: [[0, 0], [1, 0], [1, 1], [0, 1]]},
-				{basis: 3, name: 'T', pixels: [[0, 0], [1, 0], [2, 0], [1, 1]]},
+				{basis: [3, 2], name: 'L1', pixels: [[0, 0], [1, 0], [2, 0], [0, 1]]},
+				{basis: [3, 2], name: 'L2', pixels: [[0, 0], [1, 0], [2, 0], [2, 1]]},
+				{basis: [4, 1], name: 'I', pixels: [[0, 0], [1, 0], [2, 0], [3, 0]]},
+				{basis: [3, 2], name: 'S1', pixels: [[1, 0], [2, 0], [0, 1], [1, 1]]},
+				{basis: [3, 2], name: 'S2', pixels: [[0, 0], [1, 0], [1, 1], [2, 1]]},
+				{basis: [2, 2], name: 'H', pixels: [[0, 0], [1, 0], [1, 1], [0, 1]]},
+				{basis: [3, 2], name: 'T', pixels: [[0, 0], [1, 0], [2, 0], [1, 1]]},
 			]
 			const START_INTERVAL = 500;
-			const maxBasis = Math.max(...figureMaps.map(x => x.basis))
+			const maxBasis = Math.max(...figureMaps.flatMap(x => x.basis))
 			
 			function getSpeedStack() {
 				const speedStackRealGame = [[5, 400], [10, 350], [20, 300], [30, 250], [40, 200], [50, 150], [60, 100]];
@@ -106,19 +106,7 @@
 			
 			function getRandomFigure() {
 				const map = figureMaps[Math.floor(Math.random() * figureMaps.length)];
-				return {r: H, c: Math.floor((W-map.basis) / 2), map, rotation: 0}
-			}
-			
-			// not used. if rotation/move bumps it is just not done
-			function normFigureCol(figure) {
-				const tooLeftPixel = getFigurePixels(figure).find(([r, c]) => c < 0)
-				if (tooLeftPixel != null) {
-					figure.c = figure.c + (-tooLeftPixel.c);
-				}
-				const tooRightPixel = getFigurePixels(figure).find(([r, c]) => c >= W)
-				if (tooRightPixel != null) {
-					figure.c = figure.c - (tooRightPixel.c-W+1);
-				}
+				return {r: H, c: Math.floor(W / 2), map, rotation: 0}
 			}
 			
 			function trySetNewFigureRotationAndC(field, figure, newRotation, newC) {
@@ -157,16 +145,19 @@
 				// 1 - c-r+
 				// 2 - r-c-
 				// 3 - c+r-
+				const [basisRS,basisCS] = figure.map.basis;
 				const rotation = newRotation ?? figure.rotation;
-				const absC = newC ?? figure.c;
 				const reverseRC = rotation == 1 || rotation == 3;
 				const reverseFirst = rotation == 1 || rotation == 2;
 				const reverseSecond = rotation == 2 || rotation == 3;
+				const [basisR,basisC] = reverseRC ? [basisCS,basisRS] : [basisRS,basisCS];
+				const absC = (newC ?? figure.c) - Math.floor(basisC / 2);
+				const absR = figure.r - Math.floor(basisR / 2);
 				const localPixels = figure.map.pixels.map(([r, c]) => {
 					const [r2, c2] = reverseRC ? [c, r] : [r, c];
-					return [reverseFirst ? (figure.map.basis - r2 - 1) : r2, reverseSecond ? (figure.map.basis - c2 - 1) : c2]
+					return [reverseFirst ? (basisR - r2 - 1) : r2, reverseSecond ? (basisC - c2 - 1) : c2]
 				});
-				const absolutePixels = localPixels.map(([r, c]) => [r + figure.r, c + absC]);
+				const absolutePixels = localPixels.map(([r, c]) => [r + absR, c + absC]);
 				return absolutePixels;
 			}
 			
