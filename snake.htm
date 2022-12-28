@@ -1,161 +1,188 @@
-<canvas id="snake"></canvas>
-
+<div id="field"></div>
 <style>
-body {
-	display: flex;
-	flex-direction: column;
-	align-items: stretch;
-}
-
-#snake {
-	flex-grow: 1;
-	background: black;
+	#field {
+		display: flex;
+		flex-direction: column;
+		border: 1px solid black;
+		border-width: 0 0 1px 1px;
+	}
 	
-}
+	.row {
+		display: flex;
+		flex-direction: row;
+		flex-basis: 2rem;
+	}
+	
+	.cell {
+		flex-basis: 2rem;
+		border: 1px solid black;
+		border-width: 1px 1px 0 0;
+	}
+	
+	.snake {
+		background: #333;
+	}
+	
+	.fruit {
+		background: pink;
+	}
+	
+	.dinner {
+		background: green;
+	}
+	
+	.death {
+		background: red;
+	}
 </style>
 
 <script>
-
-const canvas = document.getElementById("snake");
-const ctx = canvas.getContext("2d");
-
-ctx.fillStyle="black";
-
-const ANGLES = 8;
-
-const STEP = 10;
-
-const TLR = 0.1;
-
-const _state = {
-	body: [[STEP, STEP], [STEP * 2, STEP], [STEP * 3, STEP]],
-	headIndex: 2, // which item in body is head
-	direction: 0,
-	lastStepDirection: 0,
-	snakeSize: [1],
-	fruit: null,
-}
-
-function normedMod(a, b) {
-	return ((a % b) + b) % b
-}
-
-function normX(x) {
-	return normedMod(x, canvas.width)
-}
-
-function normX(y) {
-	return normedMod(y, canvas.height)
-}
-
-function bumps([x1, y1], [x2, y2]) {
-	const dx = x1-x2;
-	const dy = y1-y2;
-	return Math.sqrt(dx*dx + dy*dy) < (STEP - TLR);
-}
-
-function bumpsArray(points, newPoint) {
-	return points.some(p => bumps(p, newPoint));
-}
-
-function bumpsSelf(state) {
-	const head = state.body[state.headIndex];
-	return state.body.some((member, i) => i != state.headIndex && bumps(member, head));
-}
-
-function setRandomFruit(state) {
-	let x = 0;
-	let y = 0
-
-	do {
-		x = Math.random() * canvas.width;
-		y = Math.random() * canvas.height;
-	}
-	while (bumpsArray(state.body, [x, y]));
+	/*   0
+	  3     1
+	     2
+	*/
 	
-	state.fruit = [x, y];
-}
-
-setRandomFruit(_state);
-
-function getDirectionAngle(direction) {
-	return 2 * (direction / ANGLES) * Math.PI;
-}
-
-function renderState({body, headIndex, direction, fruit}) {
-	ctx.fillStyle = "black";
-	ctx.clearRect(0, 0, canvas.width, canvas.height);
-	ctx.fillStyle = "red";
-	const diff = getDirectionAngle(direction)
-	body.forEach(([x, y], i) => {
-		ctx.beginPath()
-		if (i == headIndex) {
-			ctx.arc(x, y, STEP / 2, diff + Math.PI / 4, diff + Math.PI * 7 / 4);
+	const H = 10;
+	const W = 10;
+	const D = 4;
+	
+	const createHas = (snake) => {
+		let snakeSet = new Set(snake.map(([x, y]) => x + ',' + y));
+		return ([x, y]) => {
+			return snakeSet.has(x + ',' + y);
+		}
+	}
+	
+	const getRandomFruit = (snake) => {
+		let coords = [0, 0];
+		const has = createHas(snake);
+		do {
+			coords = [Math.floor(Math.random() * H), Math.floor(Math.random() * W)]
+		} while (has(coords))
+		return coords;
+	}
+	
+	const initState = () => {
+		const snake = [[0, 0]];
+		const direction = 1;
+		const prevDirection = null;
+		const fruit = getRandomFruit(snake);
+		return {
+			snake,
+			direction,
+			fruit,
+			prevDirection,
+		};
+	}
+	
+	const getNext = (d, [r, c]) => {
+		const r2 = d == 0 ? r - 1 : (d == 2 ? r + 1 : r);
+		const c2 = d == 3 ? c - 1 : (d == 1 ? c + 1 : c);
+		return normPoint([r2, c2]);
+	}
+	
+	const normPoint = ([r, c]) => {
+		return [(r + H) % H, (c + W) % W];
+	}
+	
+	const eq = ([r, c], [fr, fc]) => r == fr && c == fc;
+	
+	const step = (state) => {
+		const {direction, snake, fruit} = state;
+		const nextPoint = normPoint(getNext(direction, snake[snake.length - 1]));
+		const has = createHas(snake);
+		const loss = has(nextPoint);
+		snake.push(nextPoint);
+		if (eq(nextPoint, fruit)) {
+			state.fruit = getRandomFruit(snake);
 		} else {
-			ctx.arc(x, y, STEP / 2, 0, Math.PI * 2);
+			snake.splice(0, 1);
+		}
+		return loss;
+	}
+	
+	const renderField = () => {
+		const fieldEl = document.getElementById("field");
+		const rows = [];
+		for (let x = 0; x < H; ++x) {
+			const row = [];
+			rows.push(row);
+			const rowEl = document.createElement('div');
+			rowEl.className = "row";
+			fieldEl.appendChild(rowEl);
+			
+			for (let y = 0; y < W; ++y) {
+				const colEl = document.createElement('div');
+				colEl.className = "cell";
+				rowEl.appendChild(colEl);
+				
+				row.push(colEl);
+			}
+		}
+		return rows;
+	}
+	
+	const getCell = (field, [x, y]) => field[x][y];
+	
+	const renderState = (state, field, classedElements) => {
+		classedElements.forEach(cell => cell.className = 'cell');
+				
+		const nextClassedElements = [];
+		
+		const classify = (point, clz) => {
+			const cell = getCell(field, point);
+			cell.className = clz;
+			nextClassedElements.push(cell);
 		}
 		
-		ctx.fill();
+		for (let snakeBody of state.snake) {
+			classify(snakeBody, 'cell snake');
+		}
+		
+		classify(state.fruit, 'cell fruit');
+		
+		const next = getNext(state.direction, state.snake[state.snake.length - 1]);
+		const nextCell = getCell(field, next);
+		if (nextCell.className == 'cell fruit') {
+			nextCell.className = 'cell dinner';
+		} else if (nextCell.className == 'cell snake') {
+			nextCell.className = 'cell death';
+		} else {
+			classify(next, 'cell next');
+		}
+		return nextClassedElements;
+	}
+	
+	const _state = initState();
+	
+	let _prev = [];
+	
+	const _field = renderField();
+	
+	const rerender = () => _prev = renderState(_state, _field, _prev);
+	
+	const _interval = setInterval(() => {
+		const loss = step(_state);
+		rerender();
+		if (loss) {
+			clearInterval(_interval);
+			alert("Not impressive!")
+		}
+	}, 100)
+	
+	const changeDirection = (state, mod) => {
+		const nextDirection = (state.direction + mod + D) % D;
+		if (state.prevDirection != null && Math.abs(nextDirection - state.prevDirection) == 2) {
+			return false;
+		}
+		state.direction = nextDirection;
+		rerender();
+	}
+	
+	document.addEventListener('keydown', e => {
+		switch (e.code) {
+			case 'KeyA': changeDirection(_state, -1); break;
+			case 'KeyD': changeDirection(_state, 1); break;
+		}
 	})
-	
-	const [fx, fy] = fruit
-	ctx.fillStyle = "green";
-	ctx.beginPath()
-	ctx.arc(fx, fy, STEP / 2, 0, Math.PI * 2);
-	
-	ctx.fill();
-}
-
-function tickState(state) {
-	const {headIndex, body, direction, fruit} = state;
-	const [x, y] = body[headIndex];
-	const diff = getDirectionAngle(direction)
-	const nextX = normedMod((x + STEP * Math.cos(diff)), canvas.width);
-	const nextY = normedMod((y + STEP * Math.sin(diff)), canvas.height);
-	const newHead = [nextX, nextY];
-	if (bumps(newHead, fruit)) {
-		body.splice(headIndex + 1, 0, newHead);
-		setRandomFruit(state);
-		const newHeadIndex = headIndex + 1;
-		state.headIndex = newHeadIndex;
-	} else {
-		const newHeadIndex = (headIndex + 1) % body.length;
-		body[newHeadIndex] = newHead;
-		state.headIndex = newHeadIndex;
-	}
-	state.lastDirection = state.direction;
-}
-
-function tryChangeDirection(state, newValue) {
-	if (Math.abs(state.lastDirection - newValue) > ANGLES / 4) {
-		return false;
-	}
-	state.direction = newValue;
-	renderState(_state);
-	return true;
-}
-
-function onLeft() {
-	tryChangeDirection(_state, _state.direction - 1);
-}
-
-function onRight() {
-	tryChangeDirection(_state, _state.direction + 1);
-}
-
-const _interval = setInterval(() => {
-	tickState(_state);
-	if (bumpsSelf(_state)) {
-		clearInterval(_interval);
-	}
-	renderState(_state);
-}, 100);
-
-window.addEventListener('keydown', e => {
-	switch (e.code) {
-		case 'KeyA': onLeft(); break;
-		case 'KeyD': onRight(); break;
-	}
-})
-
 </script>
